@@ -26,6 +26,12 @@
 #include "nvvk/resourceallocator_vk.hpp"
 #include "shaders/host_device.h"
 
+#include "my_modification.hpp"
+
+#if defined (MY_MODIFICATION)
+  #include "nvvk/raytraceKHR_vk.hpp"
+#endif
+
 //--------------------------------------------------------------------------------------------------
 // Simple rasterizer of OBJ objects
 // - Each OBJ loaded are stored in an `ObjModel` and referenced by a `ObjInstance`
@@ -36,7 +42,10 @@
 class HelloVulkan : public nvvkhl::AppBaseVk
 {
 public:
-  void setup(const VkInstance& instance, const VkDevice& device, const VkPhysicalDevice& physicalDevice, uint32_t queueFamily) override;
+  void setup(const VkInstance& instance, 
+             const VkDevice& device, 
+             const VkPhysicalDevice& physicalDevice, 
+             uint32_t queueFamily) override;
   void createDescriptorSetLayout();
   void createGraphicsPipeline();
   void loadModel(const std::string& filename, glm::mat4 transform = glm::mat4(1));
@@ -119,4 +128,43 @@ public:
   nvvk::Texture               m_offscreenDepth;
   VkFormat                    m_offscreenColorFormat{VK_FORMAT_R32G32B32A32_SFLOAT};
   VkFormat                    m_offscreenDepthFormat{VK_FORMAT_X8_D24_UNORM_PACK32};
+
+  #if defined (MY_MODIFICATION)
+    void initRayTracing();
+
+    auto objectToVKGeometryKHR(const ObjModel& model);
+
+    void createBottomLevelAccelerationStructure();
+    void createTopLevelAccelerationStructure();
+
+    void createRayTracingDescriptorSet();
+    void updateRayTracingDescriptorSet();
+
+    void createRayTracingPipeline();
+
+    void createRayTracingShderBindingTable();
+
+    void raytrace(const VkCommandBuffer& cmdBuf, const glm::vec4& clearColor);
+
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR   m_rtProperties{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
+
+    nvvk::RaytracingBuilderKHR    m_rtBuilder;
+    nvvk::DescriptorSetBindings   m_rtDescSetLayoutBind;
+    VkDescriptorPool              m_rtDescPool;
+    VkDescriptorSetLayout         m_rtDescSetLayout;
+    VkDescriptorSet               m_rtDescSet;
+
+    std::vector<VkRayTracingShaderGroupCreateInfoKHR>   m_rtShaderGroups;
+    VkPipelineLayout      m_rtPipelineLayout;
+    VkPipeline            m_rtPipeline;
+
+    nvvk::Buffer      m_rtSBTBuffer;
+    VkStridedDeviceAddressRegionKHR   m_rgenRegion{};
+    VkStridedDeviceAddressRegionKHR   m_missRegion{};
+    VkStridedDeviceAddressRegionKHR   m_hitRegion{};
+    VkStridedDeviceAddressRegionKHR   m_callnRegion{};
+
+    PushConstantRay   m_pcRay{};
+  #endif
 };

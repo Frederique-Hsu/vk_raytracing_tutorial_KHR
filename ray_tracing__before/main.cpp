@@ -23,6 +23,7 @@
 // at the top of imgui.cpp.
 
 #include <array>
+#include <iostream>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "backends/imgui_impl_glfw.h"
@@ -80,7 +81,12 @@ static int const SAMPLE_HEIGHT = 720;
 //
 int main(int argc, char** argv)
 {
-  UNUSED(argc);
+  #if defined (MY_MODIFICATION)
+    for (int index = 0; index < argc; ++index)
+    {
+      std::cout << argv[index] << std::endl;
+    }
+  #endif
 
   // Setup GLFW window
   glfwSetErrorCallback(onErrorCallback);
@@ -94,7 +100,11 @@ int main(int argc, char** argv)
 
   // Setup camera
   CameraManip.setWindowSize(SAMPLE_WIDTH, SAMPLE_HEIGHT);
-  CameraManip.setLookat(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+  #if defined (MY_MODIFICATION)
+    CameraManip.setLookat(glm::vec3(5, 4, -4), glm::vec3(0, 1, 0), glm::vec3(0, 1, 0));
+  #else
+    CameraManip.setLookat(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+  #endif
 
   // Setup Vulkan
   if(!glfwVulkanSupported())
@@ -127,6 +137,23 @@ int main(int argc, char** argv)
   contextInfo.addInstanceExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, true);  // Allow debug names
   contextInfo.addDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);            // Enabling ability to present rendering
 
+  #if defined (MY_MODIFICATION)
+    /*!
+     *  \note VkRay : Activate the ray tracing extensions
+     */
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelFeature{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
+    // To build the acceleration structures
+    contextInfo.addDeviceExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, false, &accelFeature);
+
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeature{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
+    // To use the vkCmdTraceRaysKHR api.
+    contextInfo.addDeviceExtension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, false, &rtPipelineFeature);
+    // Required by ray-tracing pipeline.
+    contextInfo.addDeviceExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+  #endif
+
   // Creating Vulkan base application
   nvvk::Context vkctx{};
   vkctx.initInstance(contextInfo);
@@ -153,7 +180,12 @@ int main(int argc, char** argv)
   helloVk.initGUI(0);  // Using sub-pass 0
 
   // Creation of the example
-  helloVk.loadModel(nvh::findFile("media/scenes/cube_multi.obj", defaultSearchPaths, true));
+  #if defined (MY_MODIFICATION)
+      helloVk.loadModel(nvh::findFile("media/scenes/Medieval_building.obj", defaultSearchPaths, true));
+      helloVk.loadModel(nvh::findFile("media/scenes/plane.obj", defaultSearchPaths, true));
+  #else
+    helloVk.loadModel(nvh::findFile("media/scenes/cube_multi.obj", defaultSearchPaths, true));
+  #endif
 
   helloVk.createOffscreenRender();
   helloVk.createDescriptorSetLayout();
@@ -162,10 +194,26 @@ int main(int argc, char** argv)
   helloVk.createObjDescriptionBuffer();
   helloVk.updateDescriptorSet();
 
+  #if defined (MY_MODIFICATION)
+    helloVk.initRayTracing();
+
+    helloVk.createBottomLevelAccelerationStructure();
+    helloVk.createTopLevelAccelerationStructure();
+
+    helloVk.createRayTracingDescriptorSet();
+    helloVk.createRayTracingPipeline();
+
+    helloVk.createRayTracingShderBindingTable();
+  #endif
+
   helloVk.createPostDescriptor();
   helloVk.createPostPipeline();
   helloVk.updatePostDescriptorSet();
   glm::vec4 clearColor = glm::vec4(1, 1, 1, 1.00f);
+
+  #if defined (MY_MODIFICATION)
+    bool useRayTracer = true;
+  #endif
 
 
   helloVk.setupGlfwCallbacks(window);
@@ -187,6 +235,11 @@ int main(int argc, char** argv)
     {
       ImGuiH::Panel::Begin();
       ImGui::ColorEdit3("Clear color", reinterpret_cast<float*>(&clearColor));
+
+      #if defined (MY_MODIFICATION)
+        ImGui::Checkbox("Ray Tracer mode", &useRayTracer);
+      #endif
+
       renderUI(helloVk);
       ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
       ImGuiH::Control::Info("", "", "(F10) Toggle Pane", ImGuiH::Control::Flags::Disabled);
@@ -222,9 +275,22 @@ int main(int argc, char** argv)
       offscreenRenderPassBeginInfo.renderArea      = {{0, 0}, helloVk.getSize()};
 
       // Rendering Scene
-      vkCmdBeginRenderPass(cmdBuf, &offscreenRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-      helloVk.rasterize(cmdBuf);
-      vkCmdEndRenderPass(cmdBuf);
+      #if defined (MY_MODIFICATION)
+        if (useRayTracer)
+        {
+          helloVk.raytrace(cmdBuf, clearColor);
+        }
+        else
+        {
+          vkCmdBeginRenderPass(cmdBuf, &offscreenRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+          helloVk.rasterize(cmdBuf);
+          vkCmdEndRenderPass(cmdBuf);
+        }
+      #else
+        vkCmdBeginRenderPass(cmdBuf, &offscreenRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        helloVk.rasterize(cmdBuf);
+        vkCmdEndRenderPass(cmdBuf);
+      #endif
     }
 
 

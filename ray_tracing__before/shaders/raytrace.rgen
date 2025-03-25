@@ -1,0 +1,49 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "host_device.h"
+#include "raycommon.glsl"
+
+
+layout(location = 0) rayPayloadEXT hitPayload prd;
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, set = 0, rgba32f) uniform image2D image;
+
+layout(set = 1, binding = eGlobals) uniform _GlobalUniforms
+{
+    GlobalUniforms uni;
+};
+
+void main() 
+{
+    const vec2 pixelCenter  = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+    const vec2 inUV         = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+          vec2 d            = inUV * 2.0 - 1.0;
+        
+    vec4 origin     = uni.viewInverse * vec4(0, 0, 0, 1);
+    vec4 target     = uni.projInverse * vec4(d.x, d.y, 1, 1);
+    vec4 direction  = uni.viewInverse * vec4(normalize(target.xyz), 0);
+
+    uint rayFlags   = gl_RayFlagsOpaqueEXT;
+    float tMin      = 0.001;
+    float tMax      = 100000.0;
+
+    traceRayEXT(topLevelAS,     // top-level acceleration structure to search for hits in
+                rayFlags,       // controlling the ray trace
+                0xFF,           // culling mask to indicate whether to skip the intersection
+                0,              // record's offset of SBT
+                0,              // record's stride of SBT, to control how hitGroupId of each instance to look up a hit group
+                0,              // the index of miss shader group array
+                origin.xyz,     // ray origin
+                tMin,           // ray min. range
+                direction.xyz,  // ray direction
+                tMax,           // ray max. range
+                0);             // payload (location = 0)
+
+
+    /*! Write the resulting payload into the output image */
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue, 1.0));
+}

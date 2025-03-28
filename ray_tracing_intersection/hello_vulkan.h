@@ -29,6 +29,8 @@
 // #VKRay
 #include "nvvk/raytraceKHR_vk.hpp"
 
+#include "my_modification.hpp"
+
 //--------------------------------------------------------------------------------------------------
 // Simple rasterizer of OBJ objects
 // - Each OBJ loaded are stored in an `ObjModel` and referenced by a `ObjInstance`
@@ -162,5 +164,9 @@ public:
   nvvk::Buffer        m_spheresMatIndexBuffer;  // Define which sphere uses which material
 
   void createSpheres(uint32_t nbSpheres);
+#if defined (MY_MODIFICATION)
+  void createAabbsFromPointCloud();
+#endif
+
   auto sphereToVkGeometryKHR();
 };
